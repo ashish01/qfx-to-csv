@@ -91,41 +91,6 @@ python main.py your_file.qfx --columns invalid_column
 ```
 2. The error message will display all valid columns for your transactions
 
-## Output Formats
-
-### Table Format (default)
-```bash
-python main.py sample.qfx --columns date,payee,amount
-```
-![Table Example](https://raw.githubusercontent.com/yourusername/qfx-to-csv/main/images/table-example.png)
-
-### CSV Format
-```bash
-python main.py sample.qfx --format csv --columns date,amount
-```
-```csv
-date,amount
-2023-01-15,-49.99
-2023-01-16,1500.00
-```
-
-### TSV Format
-```bash
-python main.py sample.qfx --format tsv --columns id,payee
-```
-```tsv
-id      payee
-1001    Amazon
-1002    Employer Corp
-```
-
-## Notes
-
-- OFX and QFX files are both supported (QFX is Quicken's OFX variant)
-- Outputs to standard output - use `>` to redirect to files
-- First transaction determines available columns for validation
-- Date fields are formatted as YYYY-MM-DD
-
 ## License
 
 This project is [MIT licensed](LICENSE).
