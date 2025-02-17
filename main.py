@@ -7,7 +7,10 @@ from tabulate import tabulate
 
 
 def convert_ofx(
-    ofx_file: str, output_format: str, columns: List[str] | None = None
+    ofx_file: str,
+    output_format: str,
+    columns: List[str] | None = None,
+    no_headers: bool = False,
 ) -> None:
     """Convert OFX file to specified format and output to stdout"""
 
@@ -54,16 +57,19 @@ def convert_ofx(
     # Output based on format
     if output_format == "tsv":
         writer = csv.DictWriter(sys.stdout, fieldnames=header, delimiter="\t")
-        writer.writeheader()
+        if not no_headers:
+            writer.writeheader()
         writer.writerows(rows)
     elif output_format == "csv":
         writer = csv.DictWriter(sys.stdout, fieldnames=header)
-        writer.writeheader()
+        if not no_headers:
+            writer.writeheader()
         writer.writerows(rows)
     elif output_format == "table":
         # Convert rows to list format for tabulate
         table_data = [[row[h] for h in header] for row in rows]
-        print(tabulate(table_data, headers=header, tablefmt="simple_grid"))
+        headers = header if not no_headers else []
+        print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
 
 
 if __name__ == "__main__":
@@ -80,8 +86,13 @@ if __name__ == "__main__":
         type=str,
         help="Comma-separated list of columns to display (display all if not provided)",
     )
+    parser.add_argument(
+        "--no-headers",
+        action="store_true",
+        help="Do not print headers in output",
+    )
     args = parser.parse_args()
 
     columns = args.columns.split(",") if args.columns else None
     for ofx_file in args.ofx_files:
-        convert_ofx(ofx_file, args.format, columns)
+        convert_ofx(ofx_file, args.format, columns, args.no_headers)
