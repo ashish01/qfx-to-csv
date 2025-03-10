@@ -1,19 +1,45 @@
+#!/usr/bin/env python3
+"""
+QFX to CSV converter - Converts OFX/QFX financial files to various formats.
+"""
 import csv
-import argparse
-from typing import Dict, List
-from ofxparse import OfxParser
 import sys
+import argparse
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Union
+
+from ofxparse import OfxParser
 from tabulate import tabulate
 
 
+def get_transaction_fields(transaction: Any) -> List[str]:
+    """Extract available fields from a transaction object."""
+    return [attr for attr in dir(transaction) if not attr.startswith("_")]
+
+
+def format_value(value: Any) -> str:
+    """Format a value for display, handling date objects."""
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d")
+    return str(value)
+
+
 def convert_ofx(
-    ofx_file: str,
+    ofx_file: Union[str, Path],
     output_format: str,
-    columns: List[str] | None = None,
+    columns: Optional[List[str]] = None,
     no_headers: bool = False,
 ) -> None:
-    """Convert OFX file to specified format and output to stdout"""
-
+    """
+    Convert OFX file to specified format and output to stdout.
+    
+    Args:
+        ofx_file: Path to the OFX/QFX file
+        output_format: Format to convert to (csv, tsv, or table)
+        columns: List of columns to include in output
+        no_headers: Whether to suppress headers in output
+    """
     # Parse OFX file
     with open(ofx_file) as fileobj:
         ofx = OfxParser.parse(fileobj)
@@ -22,46 +48,36 @@ def convert_ofx(
     account = ofx.account
     transactions = account.statement.transactions
 
-    # Get first transaction to inspect available fields
-    if transactions:
-        first_trans = transactions[0]
-        all_fields = [attr for attr in dir(first_trans) if not attr.startswith("_")]
-        # Use specified columns if provided, otherwise use all fields
-        header = columns if columns else all_fields
+    if not transactions:
+        print(f"No transactions found in {ofx_file}", file=sys.stderr)
+        return
+
+    # Get transaction fields
+    first_trans = transactions[0]
+    all_fields = get_transaction_fields(first_trans)
+    
+    # Use specified columns if provided, otherwise use all fields
+    if columns:
         # Validate specified columns exist
-        if columns:
-            invalid_cols = [col for col in columns if col not in all_fields]
-            if invalid_cols:
-                print(
-                    f"Warning: Invalid columns specified: {invalid_cols}",
-                    file=sys.stderr,
-                )
-                print(f"Available columns: {all_fields}", file=sys.stderr)
-                sys.exit(1)
+        invalid_cols = [col for col in columns if col not in all_fields]
+        if invalid_cols:
+            print(f"Error: Invalid columns specified: {invalid_cols}", file=sys.stderr)
+            print(f"Available columns: {all_fields}", file=sys.stderr)
+            sys.exit(1)
+        header = columns
     else:
-        header = []
+        header = all_fields
 
     # Prepare data rows
-    rows: List[Dict[str, str]] = []
-
+    rows = []
     for trans in transactions:
-        row = {}
-        for field in header:
-            value = getattr(trans, field)
-            if hasattr(value, "strftime"):
-                row[field] = value.strftime("%Y-%m-%d")
-            else:
-                row[field] = str(value)
+        row = {field: format_value(getattr(trans, field)) for field in header}
         rows.append(row)
 
     # Output based on format
-    if output_format == "tsv":
-        writer = csv.DictWriter(sys.stdout, fieldnames=header, delimiter="\t")
-        if not no_headers:
-            writer.writeheader()
-        writer.writerows(rows)
-    elif output_format == "csv":
-        writer = csv.DictWriter(sys.stdout, fieldnames=header)
+    if output_format in ("csv", "tsv"):
+        delimiter = "," if output_format == "csv" else "\t"
+        writer = csv.DictWriter(sys.stdout, fieldnames=header, delimiter=delimiter)
         if not no_headers:
             writer.writeheader()
         writer.writerows(rows)
@@ -72,9 +88,16 @@ def convert_ofx(
         print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Convert OFX file to various formats")
-    parser.add_argument("ofx_files", nargs="+", help="Input OFX file(s)")
+def main():
+    """Main entry point for the application."""
+    parser = argparse.ArgumentParser(
+        description="Convert OFX/QFX files to various formats"
+    )
+    parser.add_argument(
+        "ofx_files", 
+        nargs="+", 
+        help="Input OFX/QFX file(s)"
+    )
     parser.add_argument(
         "--format",
         choices=["tsv", "csv", "table"],
@@ -83,7 +106,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--columns",
-        type=str,
         help="Comma-separated list of columns to display (display all if not provided)",
     )
     parser.add_argument(
@@ -94,5 +116,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     columns = args.columns.split(",") if args.columns else None
+    
     for ofx_file in args.ofx_files:
         convert_ofx(ofx_file, args.format, columns, args.no_headers)
+
+
+if __name__ == "__main__":
+    main()
